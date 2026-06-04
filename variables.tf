@@ -17,8 +17,9 @@ variable "instance_type" {
 }
 
 variable "ssh_allowed_cidr" {
-  description = "CIDR allowed to SSH to the EC2 instance."
+  description = "CIDR allowed to SSH to the EC2 instance. Leave empty to auto-detect your current public IP and append /32."
   type        = string
+  default     = ""
 }
 
 variable "node_port" {

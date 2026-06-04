@@ -14,11 +14,23 @@ terraform {
       source  = "hashicorp/local"
       version = "~> 2.5"
     }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.5"
+    }
   }
 }
 
 provider "aws" {
   region = var.aws_region
+}
+
+data "http" "public_ip" {
+  url = "https://api.ipify.org"
+}
+
+locals {
+  ssh_allowed_cidr = var.ssh_allowed_cidr != "" ? var.ssh_allowed_cidr : "${chomp(data.http.public_ip.response_body)}/32"
 }
 
 data "aws_vpc" "default" {
@@ -111,7 +123,7 @@ resource "aws_security_group" "ec2" {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = [var.ssh_allowed_cidr]
+    cidr_blocks = [local.ssh_allowed_cidr]
   }
 
   egress {

@@ -33,8 +33,9 @@ Target Group → EC2 Ubuntu 22.04 (t3.small) :30080
 | `hashicorp/aws` | `~> 5.0` | EC2, SG, ALB, TG, Listener, Key Pair |
 | `hashicorp/tls` | `~> 4.0` | Tự generate RSA 4096 SSH key pair |
 | `hashicorp/local` | `~> 2.5` | Ghi private key ra file `.pem` local |
+| `hashicorp/http` | `~> 3.5` | Tự lấy public IP hiện tại để mở SSH `/32` |
 
-> **Wire provider:** `tls_private_key` → `aws_key_pair` (public key) + `local_file` (private key `.pem`). Ba provider phối hợp trong một `terraform apply` duy nhất — không cần script ngoài.
+> **Wire provider:** `http` lấy public IP operator → EC2 Security Group SSH rule; `tls_private_key` → `aws_key_pair` (public key) + `local_file` (private key `.pem`). Các provider phối hợp trong một `terraform apply` duy nhất — không cần script ngoài.
 
 ---
 
@@ -126,13 +127,18 @@ terraform output -raw ssh_command
 | `instance_type` | `t3.small` | EC2 size |
 | `node_port` | `30080` | K8s NodePort (30000–32767) |
 | `minikube_memory_mb` | `1800` | RAM cấp cho minikube (MB) |
-| `ssh_allowed_cidr` | *(bắt buộc)* | CIDR được phép SSH vào EC2 |
+| `ssh_allowed_cidr` | `""` | CIDR được phép SSH vào EC2. Để trống thì Terraform tự lấy public IP hiện tại và thêm `/32` |
 
-Ghi vào `terraform.tfvars`:
+`terraform.tfvars` có thể chỉ cần các giá trị lab cơ bản:
 
 ```hcl
-ssh_allowed_cidr = "YOUR_IP/32"
+aws_region         = "ap-southeast-1"
+instance_type      = "t3.small"
+node_port          = 30080
+minikube_memory_mb = 1800
 ```
+
+Không cần sửa `ssh_allowed_cidr` khi clone repo về. Terraform gọi `https://api.ipify.org`, lấy IP public của máy đang chạy lệnh, rồi dùng giá trị đó cho rule SSH dạng `YOUR_PUBLIC_IP/32`. Nếu muốn override thủ công, vẫn có thể thêm `ssh_allowed_cidr = "x.x.x.x/32"` vào `terraform.tfvars`.
 
 ---
 
@@ -166,7 +172,7 @@ ssh_allowed_cidr = "YOUR_IP/32"
 |---|---|---|
 | 1 | 1 lệnh từ repo sạch → app chạy, ALB URL trả về trang app | ✅ |
 | 2 | App chạy trong K8s (Deployment + Pod), không cài thẳng EC2 | ✅ |
-| 3 | ≥2 provider wire trong cùng cấu hình (`aws` + `tls` + `local`) | ✅ |
+| 3 | ≥2 provider wire trong cùng cấu hình (`aws` + `tls` + `local` + `http`) | ✅ |
 | 4 | Reproducible — dựng lại từ đầu cho kết quả như nhau | ✅ |
 | 5 | Dọn sạch bằng `terraform destroy` | ✅ |
 
@@ -190,4 +196,5 @@ terraform destroy
 - **`--ports=30080:30080`** — map cổng NodePort ra host EC2, ALB target group nhắm thẳng vào port này mà không cần Ingress Controller.
 - **ALB thay vì NodePort trực tiếp** — EC2 SG chặn port 30080 từ Internet, chỉ ALB SG mới được vào → tăng bảo mật, có health check tự động.
 - **`tls` provider** — tự gen key, không cần lưu private key vào repo, không cần tạo tay trên AWS console.
+- **`http` provider** — tự phát hiện public IP hiện tại để mở SSH đúng `/32`, giúp người clone repo không cần sửa `ssh_allowed_cidr`.
 - **`imagePullPolicy: Never`** — tránh phụ thuộc Docker Hub, build local là đủ, phù hợp lab offline.
