@@ -1,6 +1,6 @@
 # Portfolio K8s Challenge — Kubernetes on AWS · Terraform 1-Click
 
-> **Mục tiêu challenge:** Dựng EC2, chạy minikube bên trong, deploy app vào Kubernetes, expose ra Internet qua ALB — toàn bộ bằng 1 lệnh Terraform. Phải dùng ≥2 provider, app phải chạy *trong* K8s (không cài thẳng lên EC2).
+> **Mục tiêu challenge:** Dựng EC2, chạy minikube bên trong, deploy app vào Kubernetes, expose ra Internet qua ALB — toàn bộ bằng 1 lệnh Terraform. Phải dùng ≥2 provider, app phải chạy _trong_ K8s (không cài thẳng lên EC2).
 
 ---
 
@@ -28,12 +28,12 @@ Target Group → EC2 Ubuntu 22.04 (t3.small) :30080
 
 ## Providers (≥2 — yêu cầu bắt buộc)
 
-| Provider | Version | Vai trò |
-|---|---|---|
-| `hashicorp/aws` | `~> 5.0` | EC2, SG, ALB, TG, Listener, Key Pair |
-| `hashicorp/tls` | `~> 4.0` | Tự generate RSA 4096 SSH key pair |
-| `hashicorp/local` | `~> 2.5` | Ghi private key ra file `.pem` local |
-| `hashicorp/http` | `~> 3.5` | Tự lấy public IP hiện tại để mở SSH `/32` |
+| Provider          | Version  | Vai trò                                   |
+| ----------------- | -------- | ----------------------------------------- |
+| `hashicorp/aws`   | `~> 5.0` | EC2, SG, ALB, TG, Listener, Key Pair      |
+| `hashicorp/tls`   | `~> 4.0` | Tự generate RSA 4096 SSH key pair         |
+| `hashicorp/local` | `~> 2.5` | Ghi private key ra file `.pem` local      |
+| `hashicorp/http`  | `~> 3.5` | Tự lấy public IP hiện tại để mở SSH `/32` |
 
 > **Wire provider:** `http` lấy public IP operator → EC2 Security Group SSH rule; `tls_private_key` → `aws_key_pair` (public key) + `local_file` (private key `.pem`). Các provider phối hợp trong một `terraform apply` duy nhất — không cần script ngoài.
 
@@ -79,12 +79,14 @@ Terraform
 ## Kubernetes Manifests
 
 **Deployment** (`k8s-manifests/deployment.yaml`)
+
 - `replicas: 3` — 3 Pod nginx
 - `readinessProbe`: HTTP GET `/` :80, `initialDelaySeconds: 5`, `periodSeconds: 5`
 - `livenessProbe`: HTTP GET `/` :80, `initialDelaySeconds: 15`, `periodSeconds: 10`
 - Rolling update mặc định — zero downtime khi update image
 
 **Service** (`k8s-manifests/service.yaml`)
+
 - `type: NodePort`, `nodePort: 30080`
 - `selector: app=portfolio` — tự tìm đúng 3 Pod
 
@@ -96,7 +98,8 @@ Terraform
 
 ```powershell
 # Bước 1 — clone về, vào thư mục
-cd cloud\w8\thu\portfolio-k8s-challenge
+git clone https://github.com/KaPhuDong/k8s-on-aws-1click-automation.git
+cd k8s-on-aws-1click-automation
 
 # Bước 2 — init provider
 terraform init
@@ -121,13 +124,13 @@ terraform output -raw ssh_command
 
 ## Biến cấu hình
 
-| Biến | Default | Mô tả |
-|---|---|---|
-| `aws_region` | `ap-southeast-1` | Region deploy |
-| `instance_type` | `t3.small` | EC2 size |
-| `node_port` | `30080` | K8s NodePort (30000–32767) |
-| `minikube_memory_mb` | `1800` | RAM cấp cho minikube (MB) |
-| `ssh_allowed_cidr` | `""` | CIDR được phép SSH vào EC2. Để trống thì Terraform tự lấy public IP hiện tại và thêm `/32` |
+| Biến                 | Default          | Mô tả                                                                                      |
+| -------------------- | ---------------- | ------------------------------------------------------------------------------------------ |
+| `aws_region`         | `ap-southeast-1` | Region deploy                                                                              |
+| `instance_type`      | `t3.small`       | EC2 size                                                                                   |
+| `node_port`          | `30080`          | K8s NodePort (30000–32767)                                                                 |
+| `minikube_memory_mb` | `1800`           | RAM cấp cho minikube (MB)                                                                  |
+| `ssh_allowed_cidr`   | `""`             | CIDR được phép SSH vào EC2. Để trống thì Terraform tự lấy public IP hiện tại và thêm `/32` |
 
 `terraform.tfvars` có thể chỉ cần các giá trị lab cơ bản:
 
@@ -144,13 +147,19 @@ Không cần sửa `ssh_allowed_cidr` khi clone repo về. Terraform gọi `http
 
 ## Outputs
 
-| Output | Mô tả |
-|---|---|
-| `alb_url` | URL app — mở trên browser |
-| `alb_dns_name` | DNS name của ALB |
-| `ec2_public_ip` | IP public của EC2 |
-| `ssh_command` | Lệnh SSH để debug |
+| Output                 | Mô tả                                  |
+| ---------------------- | -------------------------------------- |
+| `alb_url`              | URL app — mở trên browser              |
+| `alb_dns_name`         | DNS name của ALB                       |
+| `ec2_public_ip`        | IP public của EC2                      |
+| `ssh_command`          | Lệnh SSH để debug                      |
 | `ssh_private_key_path` | Đường dẫn file `.pem` được tạo tự động |
+
+---
+
+## Demo Live
+
+🌐 **[http://portfolio-k8s-challenge-39547660.ap-southeast-1.elb.amazonaws.com/](http://portfolio-k8s-challenge-39547660.ap-southeast-1.elb.amazonaws.com/)**
 
 ---
 
@@ -168,13 +177,13 @@ Không cần sửa `ssh_allowed_cidr` khi clone repo về. Terraform gọi `http
 
 ## Acceptance Checklist
 
-| # | Tiêu chí | Đạt |
-|---|---|---|
-| 1 | 1 lệnh từ repo sạch → app chạy, ALB URL trả về trang app | ✅ |
-| 2 | App chạy trong K8s (Deployment + Pod), không cài thẳng EC2 | ✅ |
-| 3 | ≥2 provider wire trong cùng cấu hình (`aws` + `tls` + `local` + `http`) | ✅ |
-| 4 | Reproducible — dựng lại từ đầu cho kết quả như nhau | ✅ |
-| 5 | Dọn sạch bằng `terraform destroy` | ✅ |
+| #   | Tiêu chí                                                                | Đạt |
+| --- | ----------------------------------------------------------------------- | --- |
+| 1   | 1 lệnh từ repo sạch → app chạy, ALB URL trả về trang app                | ✅  |
+| 2   | App chạy trong K8s (Deployment + Pod), không cài thẳng EC2              | ✅  |
+| 3   | ≥2 provider wire trong cùng cấu hình (`aws` + `tls` + `local` + `http`) | ✅  |
+| 4   | Reproducible — dựng lại từ đầu cho kết quả như nhau                     | ✅  |
+| 5   | Dọn sạch bằng `terraform destroy`                                       | ✅  |
 
 ---
 
